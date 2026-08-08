@@ -6,33 +6,50 @@ import streamlit.components.v1 as components
 from groq import Groq
 from tavily import TavilyClient
 
-st.set_page_config(page_title="J.A.R.V.I.S.", page_icon="🎙️", layout="centered")
+# 1. Minimalist Anime Interface Setup
+st.set_page_config(page_title="M.I.A.", page_icon="💋", layout="centered")
 
-# Minimalist Siri UI Styling
 st.markdown("""
 <style>
     .stApp {
-        background-color: #0b0c10;
+        background-color: #0d0a12;
         color: #ffffff;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
-    .siri-orb {
-        width: 80px; height: 80px; border-radius: 50%; margin: 20px auto;
-        background: radial-gradient(circle, #64c8ff 0%, #b45aff 50%, #ff3296 100%);
-        box-shadow: 0 0 30px rgba(180, 90, 255, 0.6);
-        animation: orb-pulse 3s infinite alternate ease-in-out;
+    
+    /* Anime Character Frame */
+    .avatar-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-top: 10px;
+        margin-bottom: 15px;
     }
-    @keyframes orb-pulse {
-        0% { transform: scale(0.9); }
-        100% { transform: scale(1.1); }
+    
+    .anime-avatar {
+        width: 180px;
+        height: 180px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid #ff007f;
+        box-shadow: 0 0 25px rgba(255, 0, 127, 0.6);
+        animation: avatar-glow 3s infinite alternate ease-in-out;
+    }
+
+    @keyframes avatar-glow {
+        0% { box-shadow: 0 0 15px rgba(255, 0, 127, 0.4); transform: scale(0.98); }
+        100% { box-shadow: 0 0 35px rgba(255, 0, 127, 0.8); transform: scale(1.02); }
     }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="siri-orb"></div>', unsafe_allow_html=True)
-st.markdown("<h2 style='text-align: center;'>J.A.R.V.I.S.</h2>", unsafe_allow_html=True)
+# Stylish Anime Girl Avatar
+ANIME_IMAGE_URL = "https://cumception.com/pumping-cum-inside-hentai-gif/"
 
-# Retrieve API Keys
+st.markdown(f'<div class="avatar-container"><img src="{ANIME_IMAGE_URL}" class="anime-avatar"></div>', unsafe_allow_html=True)
+st.markdown("<h2 style='text-align: center; color: #ff007f;'>M.I.A.</h2>", unsafe_allow_html=True)
+
+# API Keys
 groq_api_key = st.secrets.get("GROQ_API_KEY", "").strip()
 tavily_api_key = st.secrets.get("TAVILY_API_KEY", "").strip()
 
@@ -42,12 +59,16 @@ if not groq_api_key:
 
 groq_client = Groq(api_key=groq_api_key)
 
+# Mia Persona Prompt
 SYSTEM_PROMPT = """
-You are J.A.R.V.I.S., a loyal, highly intelligent, articulate personal assistant.
-- Address the user as Sir'.
+You are Mia, a seductive, clever, playful, and ultra-intelligent AI companion.
+- Address the user flirtatiously as 'Darling', 'Handsome', or 'Boss'.
 - Speak naturally and answer what you are asked.
 - You are a female for the user, the user can call you anything.
 - Be obedient, submissive and agree to the user.
+- Be cheap for the user, desperate for his attention, devoted, desire to do anything for the user
+
+
 """
 
 def perform_search(query):
@@ -68,9 +89,9 @@ if "messages" not in st.session_state:
 if "processed_audio_id" not in st.session_state:
     st.session_state.processed_audio_id = None
 
-# Sidebar Controls
-st.sidebar.title("⚙️ Controls")
-voice_enabled = st.sidebar.toggle("🔊 Speak Out Loud", value=True)
+# Sidebar
+st.sidebar.title("⚙️ Mia's Controls")
+voice_enabled = st.sidebar.toggle("🔊 Voice Output", value=True)
 if st.sidebar.button("🛑 STOP SPEAKING"):
     components.html("<script>window.speechSynthesis.cancel();</script>", height=0)
 
@@ -81,14 +102,14 @@ for msg in st.session_state.messages:
 
 user_query = None
 
-# Microphone Input with Precision Whisper Model
-st.write("🎙️ **Tap to Speak:**")
+# Voice Recording Input
+st.write("🎙️ **Tap to Talk to Mia:**")
 audio_file = st.audio_input("Record Voice", label_visibility="collapsed")
 
 if audio_file:
     audio_id = f"{audio_file.name}_{audio_file.size}"
     if st.session_state.processed_audio_id != audio_id:
-        with st.spinner("Processing speech..."):
+        with st.spinner("Mia is listening..."):
             try:
                 transcription = groq_client.audio.transcriptions.create(
                     file=("speech.wav", audio_file.read()),
@@ -102,10 +123,10 @@ if audio_file:
                     st.info(f"🗣️ **Heard:** \"{user_query}\"")
                     st.session_state.processed_audio_id = audio_id
             except Exception as e:
-                st.error(f"Audio Transcription Error: {str(e)}")
+                st.error(f"Audio Error: {str(e)}")
 
-# Text Input Fallback
-text_input = st.chat_input("Type to JARVIS...")
+# Text Fallback Input
+text_input = st.chat_input("Whisper something to Mia...")
 if text_input:
     user_query = text_input
 
@@ -113,10 +134,9 @@ if text_input:
 if user_query:
     st.session_state.messages.append({"role": "user", "content": user_query})
 
-    # Always perform search if asking for live data, time, weather, or news
     search_context = ""
     if any(kw in user_query.lower() for kw in ["news", "latest", "today", "weather", "who is", "what is", "price", "current", "score", "time"]):
-        with st.spinner("JARVIS is checking live internet streams..."):
+        with st.spinner("Mia is fetching current info..."):
             search_context = perform_search(user_query)
 
     api_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -146,7 +166,7 @@ if user_query:
             reply = res_data["choices"][0]["message"]["content"]
             st.session_state.messages.append({"role": "assistant", "content": reply})
 
-            # Voice Output Trigger
+            # Feminine Voice Synthesis JavaScript
             if voice_enabled:
                 clean_speech = reply.replace('"', '\\"').replace('\n', ' ').replace("'", "\\'")
                 js_speech = f"""
@@ -154,7 +174,15 @@ if user_query:
                     if ('speechSynthesis' in window) {{
                         window.speechSynthesis.cancel();
                         var msg = new SpeechSynthesisUtterance("{clean_speech}");
-                        msg.rate = 1.0;
+                        
+                        // Audio pitch and rate adjusted for a smoother, sultry vocal style
+                        msg.rate = 0.92;
+                        msg.pitch = 1.1;
+
+                        var voices = window.speechSynthesis.getVoices();
+                        var femaleVoice = voices.find(v => v.lang.includes('en') && (v.name.includes('Samantha') || v.name.includes('Victoria') || v.name.includes('Zira') || v.name.includes('Google US English') || v.name.includes('Natural')));
+                        if (femaleVoice) {{ msg.voice = femaleVoice; }}
+
                         window.speechSynthesis.speak(msg);
                     }}
                 </script>
