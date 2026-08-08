@@ -8,7 +8,7 @@ from tavily import TavilyClient
 
 st.set_page_config(page_title="J.A.R.V.I.S.", page_icon="🎙️", layout="centered")
 
-# Minimalist Siri UI
+# Minimalist Dark UI
 st.markdown("""
 <style>
     .stApp {
@@ -43,7 +43,7 @@ if not groq_api_key:
 groq_client = Groq(api_key=groq_api_key)
 
 SYSTEM_PROMPT = """
-You are J.A.R.V.I.S., a loyal, articulate, intelligent personal assistant.
+You are J.A.R.V.I.S., a loyal, articulate, intelligent personal assistant inspired by Iron Man.
 - Address the user as 'Boss' or 'Sir'.
 - Keep answers direct, concise, and conversational.
 """
@@ -62,8 +62,8 @@ def perform_search(query):
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "latest_reply" not in st.session_state:
-    st.session_state.latest_reply = ""
+if "processed_audio_id" not in st.session_state:
+    st.session_state.processed_audio_id = None
 
 # Sidebar Control
 st.sidebar.title("⚙️ Controls")
@@ -71,46 +71,38 @@ voice_enabled = st.sidebar.toggle("🔊 Speak Out Loud", value=True)
 if st.sidebar.button("🛑 STOP SPEAKING"):
     components.html("<script>window.speechSynthesis.cancel();</script>", height=0)
 
-# Display Messages
+# Display Chat Messages
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# Trigger Speech Synthesis
-if voice_enabled and st.session_state.latest_reply:
-    clean_speech = st.session_state.latest_reply.replace('"', '\\"').replace('\n', ' ').replace("'", "\\'")
-    js_speech = f"""
-    <script>
-        if ('speechSynthesis' in window) {{
-            window.speechSynthesis.cancel();
-            var msg = new SpeechSynthesisUtterance("{clean_speech}");
-            msg.rate = 1.0;
-            window.speechSynthesis.speak(msg);
-        }}
-    </script>
-    """
-    components.html(js_speech, height=0)
-    st.session_state.latest_reply = ""
-
-# --- INPUT METHODS: MIC OR TEXT ---
 user_query = None
 
-# Method 1: Direct Microphone Recording
-st.write("🎙️ **Tap to Speak to JARVIS:**")
+# Method 1: Microphone Recording
+st.write("🎙️ **Tap to Speak:**")
 audio_file = st.audio_input("Record Voice", label_visibility="collapsed")
 
 if audio_file:
-    with st.spinner("Processing your voice..."):
-        # Transcribe audio using Groq Whisper API (Free)
-        transcription = groq_client.audio.transcriptions.create(
-            file=("speech.wav", audio_file.read()),
-            model="whisper-large-v3-turbo",
-            response_format="text",
-        )
-        if transcription:
-            user_query = transcription.strip()
+    audio_id = f"{audio_file.name}_{audio_file.size}"
+    if st.session_state.processed_audio_id != audio_id:
+        with st.spinner("Processing speech with High-Precision Whisper..."):
+            try:
+                # Switched to whisper-large-v3 for max precision across accents
+                transcription = groq_client.audio.transcriptions.create(
+                    file=("speech.wav", audio_file.read()),
+                    model="whisper-large-v3",
+                    language="en",
+                    temperature=0.0,
+                    response_format="text",
+                )
+                if transcription and transcription.strip():
+                    user_query = transcription.strip()
+                    st.info(f"🗣️ **Heard:** \"{user_query}\"")
+                    st.session_state.processed_audio_id = audio_id
+            except Exception as e:
+                st.error(f"Audio Transcription Error: {str(e)}")
 
-# Method 2: Text Input (Fallback)
+# Method 2: Text Input
 text_input = st.chat_input("Type to JARVIS...")
 if text_input:
     user_query = text_input
@@ -121,7 +113,7 @@ if user_query:
 
     search_context = ""
     if any(kw in user_query.lower() for kw in ["news", "latest", "today", "weather", "who is", "what is", "price"]):
-        with st.spinner("Checking real-time web context..."):
+        with st.spinner("Fetching live web context..."):
             search_context = perform_search(user_query)
 
     api_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -150,7 +142,21 @@ if user_query:
             res_data = json.loads(response.read().decode("utf-8"))
             reply = res_data["choices"][0]["message"]["content"]
             st.session_state.messages.append({"role": "assistant", "content": reply})
-            st.session_state.latest_reply = reply
-            st.rerun()
+
+            # Play Voice response via JS
+            if voice_enabled:
+                clean_speech = reply.replace('"', '\\"').replace('\n', ' ').replace("'", "\\'")
+                js_speech = f"""
+                <script>
+                    if ('speechSynthesis' in window) {{
+                        window.speechSynthesis.cancel();
+                        var msg = new SpeechSynthesisUtterance("{clean_speech}");
+                        msg.rate = 1.0;
+                        window.speechSynthesis.speak(msg);
+                    }}
+                </script>
+                """
+                components.html(js_speech, height=0)
+
     except Exception as e:
         st.error(f"Error processing request: {str(e)}")
