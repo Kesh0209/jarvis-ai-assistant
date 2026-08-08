@@ -1,11 +1,14 @@
 import os
+import json
+import urllib.request
 import streamlit as st
 import streamlit.components.v1 as components
 from groq import Groq
+from tavily import TavilyClient
 
 st.set_page_config(page_title="J.A.R.V.I.S.", page_icon="🎙️", layout="centered")
 
-# Siri UI Styling
+# Minimalist Siri UI Styling
 st.markdown("""
 <style>
     .stApp {
@@ -29,8 +32,9 @@ st.markdown("""
 st.markdown('<div class="siri-orb"></div>', unsafe_allow_html=True)
 st.markdown("<h2 style='text-align: center;'>J.A.R.V.I.S.</h2>", unsafe_allow_html=True)
 
-# API Key Validation
+# Retrieve API Keys
 groq_api_key = st.secrets.get("GROQ_API_KEY", "").strip()
+tavily_api_key = st.secrets.get("TAVILY_API_KEY", "").strip()
 
 if not groq_api_key:
     st.warning("⚠️ GROQ_API_KEY is missing in Streamlit Secrets.")
@@ -42,8 +46,21 @@ SYSTEM_PROMPT = """
 You are J.A.R.V.I.S., a loyal, highly intelligent, articulate personal assistant inspired by Iron Man.
 - Address the user as 'Boss' or 'Sir'.
 - Speak naturally, directly, and concisely.
-- Utilize your live web connectivity to provide real-time facts, current time, news, and weather.
+- Use provided live web context to give precise, up-to-date real-time information.
 """
+
+def perform_search(query):
+    if not tavily_api_key:
+        return ""
+    try:
+        tavily = TavilyClient(api_key=tavily_api_key)
+        res = tavily.search(query=query, max_results=3)
+        results = res.get("results", [])
+        if not results:
+            return ""
+        return "\n".join([f"- {r['title']}: {r['content']}" for r in results])
+    except Exception:
+        return ""
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -63,7 +80,7 @@ for msg in st.session_state.messages:
 
 user_query = None
 
-# Microphone Input
+# Microphone Input with Precision Whisper Model
 st.write("🎙️ **Tap to Speak:**")
 audio_file = st.audio_input("Record Voice", label_visibility="collapsed")
 
@@ -84,35 +101,51 @@ if audio_file:
                     st.info(f"🗣️ **Heard:** \"{user_query}\"")
                     st.session_state.processed_audio_id = audio_id
             except Exception as e:
-                st.error(f"Audio Error: {str(e)}")
+                st.error(f"Audio Transcription Error: {str(e)}")
 
 # Text Input Fallback
 text_input = st.chat_input("Type to JARVIS...")
 if text_input:
     user_query = text_input
 
-# Execute Query with Auto Web Search
+# Process Command
 if user_query:
     st.session_state.messages.append({"role": "user", "content": user_query})
+
+    # Always perform search if asking for live data, time, weather, or news
+    search_context = ""
+    if any(kw in user_query.lower() for kw in ["news", "latest", "today", "weather", "who is", "what is", "price", "current", "score", "time"]):
+        with st.spinner("JARVIS is checking live internet streams..."):
+            search_context = perform_search(user_query)
 
     api_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     for msg in st.session_state.messages[:-1]:
         api_messages.append({"role": msg["role"], "content": msg["content"]})
-    api_messages.append({"role": "user", "content": user_query})
+    
+    final_prompt = user_query + (f"\n\n[VERIFIED LIVE INTERNET DATA]:\n{search_context}" if search_context else "")
+    api_messages.append({"role": "user", "content": final_prompt})
 
-    with st.spinner("JARVIS is connecting to live web streams..."):
-        try:
-            # groq/compound natively runs real-time web searches server-side
-            response = groq_client.chat.completions.create(
-                model="groq/compound",
-                messages=api_messages,
-                temperature=0.3
-            )
-            
-            reply = response.choices[0].message.content
+    payload = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": api_messages,
+        "temperature": 0.4,
+        "max_tokens": 1024
+    }
+
+    req = urllib.request.Request(
+        "https://api.groq.com/openai/v1/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Authorization": f"Bearer {groq_api_key}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"},
+        method="POST"
+    )
+
+    try:
+        with urllib.request.urlopen(req) as response:
+            res_data = json.loads(response.read().decode("utf-8"))
+            reply = res_data["choices"][0]["message"]["content"]
             st.session_state.messages.append({"role": "assistant", "content": reply})
 
-            # Speak Response
+            # Voice Output Trigger
             if voice_enabled:
                 clean_speech = reply.replace('"', '\\"').replace('\n', ' ').replace("'", "\\'")
                 js_speech = f"""
@@ -127,5 +160,5 @@ if user_query:
                 """
                 components.html(js_speech, height=0)
 
-        except Exception as e:
-            st.error(f"Error: {str(e)}")
+    except Exception as e:
+        st.error(f"Error processing request: {str(e)}")
