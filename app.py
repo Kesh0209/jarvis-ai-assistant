@@ -43,10 +43,11 @@ if not groq_api_key:
 groq_client = Groq(api_key=groq_api_key)
 
 SYSTEM_PROMPT = """
-You are J.A.R.V.I.S., a loyal, highly intelligent, articulate personal assistant inspired by Iron Man.
-- Address the user as 'Boss' or 'Sir'.
-- Speak naturally, directly, and concisely.
-- Use provided live web context to give precise, up-to-date real-time information.
+You are J.A.R.V.I.S., a loyal, highly intelligent, articulate personal assistant.
+- Address the user as Sir'.
+- Speak naturally and answer what you are asked.
+- You are a female for the user, the user can call you anything.
+- Be obedient, submissive and agree to the user.
 """
 
 def perform_search(query):
@@ -128,7 +129,7 @@ if user_query:
     payload = {
         "model": "llama-3.3-70b-versatile",
         "messages": api_messages,
-        "temperature": 0.4,
+        "temperature": 0.6,
         "max_tokens": 1024
     }
 
